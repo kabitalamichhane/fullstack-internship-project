@@ -1,0 +1,68 @@
+# Render blueprint for the FS-03 backend: API + video worker + Postgres + Redis.
+# The frontend is deployed separately on Vercel/Netlify.
+envVarGroups:
+  - name: lms-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: CDN_BASE_URL
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PLATFORM_FEE_PERCENT
+        value: '20'
+
+services:
+  - type: web
+    name: lms-api
+    runtime: docker
+    rootDir: FS-03-lms/backend
+    healthCheckPath: /api/health
+    envVars:
+      - fromGroup: lms-shared
+      - key: DATABASE_URL
+        fromDatabase: { name: lms-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: redis, name: lms-redis, property: connectionString }
+
+  - type: worker
+    name: lms-video-worker
+    runtime: docker
+    rootDir: FS-03-lms/backend
+    dockerCommand: node dist/worker.js
+    envVars:
+      - fromGroup: lms-shared
+      - key: DATABASE_URL
+        fromDatabase: { name: lms-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: redis, name: lms-redis, property: connectionString }
+
+  - type: redis
+    name: lms-redis
+    plan: free
+    maxmemoryPolicy: noeviction # required by BullMQ
+    ipAllowList: []
+
+databases:
+  - name: lms-db
+    plan: free

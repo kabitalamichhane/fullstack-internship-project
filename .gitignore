@@ -1,0 +1,27 @@
+# dependencies & builds
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# environment / secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# logs & OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+
+# local uploads / temp media
+uploads/
+tmp/
+*.mp4
+!**/screenshots/**

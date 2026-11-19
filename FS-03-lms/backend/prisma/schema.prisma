@@ -1,0 +1,227 @@
+// FS-03 Learning Management System - database schema
+// Money is stored in cents.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum VideoStatus {
+  NONE
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum LiveStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(STUDENT)
+  bio          String?
+  createdAt    DateTime @default(now())
+
+  coursesTaught Course[]         @relation("InstructorCourses")
+  enrollments   Enrollment[]
+  progress      LessonProgress[]
+  attempts      QuizAttempt[]
+  certificates  Certificate[]
+  messages      ChatMessage[]
+  payments      Payment[]
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  instructorId String
+  title        String
+  slug         String   @unique
+  subtitle     String?
+  description  String
+  category     String   @default("General")
+  level        String   @default("Beginner")
+  priceCents   Int      @default(0)
+  thumbnailUrl String?
+  published    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  instructor   User          @relation("InstructorCourses", fields: [instructorId], references: [id])
+  lessons      Lesson[]
+  quizzes      Quiz[]
+  enrollments  Enrollment[]
+  liveClasses  LiveClass[]
+  certificates Certificate[]
+  payments     Payment[]
+
+  @@index([instructorId])
+}
+
+model Lesson {
+  id          String      @id @default(cuid())
+  courseId    String
+  title       String
+  content     String? // notes / text shown under the video
+  position    Int
+  isPreview   Boolean     @default(false) // free preview for non-enrolled visitors
+  durationSec Int?
+  videoStatus VideoStatus @default(NONE)
+  rawVideoKey String?
+  hlsUrl      String? // CloudFront URL of master.m3u8
+  videoError  String?
+  createdAt   DateTime    @default(now())
+
+  course   Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+  quizzes  Quiz[]
+
+  @@index([courseId, position])
+}
+
+model Enrollment {
+  id          String    @id @default(cuid())
+  userId      String
+  courseId    String
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id         String   @id @default(cuid())
+  userId     String
+  lessonId   String
+  watchedSec Int      @default(0)
+  completed  Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id          String   @id @default(cuid())
+  courseId    String
+  lessonId    String?
+  title       String
+  passPercent Int      @default(70)
+  createdAt   DateTime @default(now())
+
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson    Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  questions Question[]
+  attempts  QuizAttempt[]
+}
+
+model Question {
+  id           String   @id @default(cuid())
+  quizId       String
+  text         String
+  options      String[]
+  correctIndex Int
+  explanation  String?
+  position     Int
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  quizId    String
+  userId    String
+  answers   Int[]
+  score     Int // percent 0-100
+  passed    Boolean
+  createdAt DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId, userId])
+}
+
+model LiveClass {
+  id          String     @id @default(cuid())
+  courseId    String
+  title       String
+  scheduledAt DateTime
+  roomName    String     @unique
+  status      LiveStatus @default(SCHEDULED)
+  createdAt   DateTime   @default(now())
+
+  course   Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  liveClassId String
+  userId      String
+  text        String
+  createdAt   DateTime @default(now())
+
+  liveClass LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([liveClassId, createdAt])
+}
+
+model Certificate {
+  id       String   @id @default(cuid())
+  code     String   @unique // public verification code
+  userId   String
+  courseId String
+  issuedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model Payment {
+  id                     String        @id @default(cuid())
+  userId                 String
+  courseId               String
+  amountCents            Int
+  platformFeeCents       Int
+  instructorEarningCents Int
+  status                 PaymentStatus @default(PENDING)
+  stripeSessionId        String?       @unique
+  createdAt              DateTime      @default(now())
+  paidAt                 DateTime?
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@index([courseId])
+}

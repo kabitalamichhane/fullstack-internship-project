@@ -1,0 +1,169 @@
+// FS-01 Multi-Vendor Marketplace - database schema
+// All money values are stored as integers in the smallest currency unit (cents / paise).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  VENDOR
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PLACED
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+
+  vendor  Vendor?
+  orders  Order[]
+  reviews Review[]
+}
+
+model Vendor {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  storeName       String   @unique
+  description     String?
+  logoUrl         String?
+  approved        Boolean  @default(false)
+  stripeAccountId String?
+  createdAt       DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products     Product[]
+  vendorOrders VendorOrder[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  vendorId    String
+  categoryId  String
+  title       String
+  description String
+  priceCents  Int
+  stock       Int      @default(0)
+  images      String[]
+  isActive    Boolean  @default(true)
+  ratingAvg   Float    @default(0)
+  ratingCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor     Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id])
+  reviews    Review[]
+  orderItems OrderItem[]
+
+  @@index([vendorId])
+  @@index([categoryId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  status          OrderStatus @default(PENDING_PAYMENT)
+  subtotalCents   Int
+  discountCents   Int         @default(0)
+  totalCents      Int
+  couponCode      String?
+  checkoutSessionId String?   @unique
+  paymentIntentId String?     @unique
+  shippingAddress Json
+  createdAt       DateTime    @default(now())
+  paidAt          DateTime?
+
+  user         User          @relation(fields: [userId], references: [id])
+  vendorOrders VendorOrder[]
+
+  @@index([userId])
+}
+
+// One order is split into one VendorOrder per vendor. Each vendor ships and is paid separately.
+model VendorOrder {
+  id               String      @id @default(cuid())
+  orderId          String
+  vendorId         String
+  status           OrderStatus @default(PENDING_PAYMENT)
+  subtotalCents    Int
+  discountCents    Int         @default(0)
+  commissionCents  Int
+  vendorPayoutCents Int
+  transferId       String?
+  updatedAt        DateTime    @updatedAt
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor Vendor      @relation(fields: [vendorId], references: [id])
+  items  OrderItem[]
+
+  @@index([vendorId])
+}
+
+model OrderItem {
+  id             String @id @default(cuid())
+  vendorOrderId  String
+  productId      String
+  title          String
+  unitPriceCents Int
+  quantity       Int
+
+  vendorOrder VendorOrder @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  userId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, userId])
+}
+
+model Coupon {
+  id            String     @id @default(cuid())
+  code          String     @unique
+  type          CouponType
+  value         Int // percent (1-100) or fixed amount in cents
+  minOrderCents Int        @default(0)
+  maxUses       Int?
+  usedCount     Int        @default(0)
+  expiresAt     DateTime?
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+}
