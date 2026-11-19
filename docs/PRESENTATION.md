@@ -1,5 +1,7 @@
 # 10-Minute Final Presentation — Outline
 
+**Slide deck:** [Final-Project-Presentation.pptx](./Final-Project-Presentation.pptx) (12 slides, with speaker notes).
+
 Covers **problem, design, challenges, results, next steps** for both projects. Aim for ~12 slides; keep demos as short pre-recorded clips in case live demos fail.
 
 | Time | Slide | What to say / show |
