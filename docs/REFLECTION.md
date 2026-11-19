@@ -1,6 +1,5 @@
 # Individual Reflection
 
-**Name:** Kabita Lamichhane 
 **Track:** Full-Stack Development  
 **Projects:** FS-01 Multi-Vendor Marketplace and FS-03 Learning Management System
 
