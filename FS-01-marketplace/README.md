@@ -81,6 +81,10 @@ npm install
 npm run dev             # http://localhost:5173
 ```
 
+In development, if Redis is unavailable, the API uses temporary in-memory sessions and carts and logs a warning. They are lost when the API stops; caching is skipped.
+
+If Elasticsearch is unavailable, searches immediately use PostgreSQL and retry Elasticsearch with an increasing backoff.
+
 ### Demo accounts (password `Password123!`)
 
 | Email | Role |

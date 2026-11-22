@@ -4,31 +4,58 @@ import { prisma } from './prisma';
 
 export const es = new Client({ node: config.elasticUrl });
 export const PRODUCT_INDEX = 'products';
+const ELASTIC_RETRY_BASE_MS = 30_000;
+const ELASTIC_RETRY_MAX_MS = 5 * 60_000;
+
+let elasticFailureCount = 0;
+let elasticRetryAt = 0;
+
+export function shouldUseElasticsearch() {
+  return Date.now() >= elasticRetryAt;
+}
+
+export function markElasticsearchAvailable() {
+  elasticFailureCount = 0;
+  elasticRetryAt = 0;
+}
+
+export function markElasticsearchUnavailable() {
+  elasticFailureCount += 1;
+  const retryDelay = Math.min(ELASTIC_RETRY_MAX_MS, ELASTIC_RETRY_BASE_MS * 2 ** Math.min(elasticFailureCount - 1, 4));
+  elasticRetryAt = Date.now() + retryDelay;
+}
 
 export async function ensureProductIndex() {
-  const exists = await es.indices.exists({ index: PRODUCT_INDEX });
-  if (exists) return;
-  await es.indices.create({
-    index: PRODUCT_INDEX,
-    mappings: {
-      properties: {
-        title: { type: 'text', fields: { keyword: { type: 'keyword' } } },
-        description: { type: 'text' },
-        categoryId: { type: 'keyword' },
-        categorySlug: { type: 'keyword' },
-        categoryName: { type: 'keyword' },
-        vendorId: { type: 'keyword' },
-        storeName: { type: 'keyword' },
-        priceCents: { type: 'integer' },
-        stock: { type: 'integer' },
-        ratingAvg: { type: 'float' },
-        ratingCount: { type: 'integer' },
-        image: { type: 'keyword', index: false },
-        isActive: { type: 'boolean' },
-        createdAt: { type: 'date' },
-      },
-    },
-  });
+  try {
+    const exists = await es.indices.exists({ index: PRODUCT_INDEX });
+    if (!exists) {
+      await es.indices.create({
+        index: PRODUCT_INDEX,
+        mappings: {
+          properties: {
+            title: { type: 'text', fields: { keyword: { type: 'keyword' } } },
+            description: { type: 'text' },
+            categoryId: { type: 'keyword' },
+            categorySlug: { type: 'keyword' },
+            categoryName: { type: 'keyword' },
+            vendorId: { type: 'keyword' },
+            storeName: { type: 'keyword' },
+            priceCents: { type: 'integer' },
+            stock: { type: 'integer' },
+            ratingAvg: { type: 'float' },
+            ratingCount: { type: 'integer' },
+            image: { type: 'keyword', index: false },
+            isActive: { type: 'boolean' },
+            createdAt: { type: 'date' },
+          },
+        },
+      });
+    }
+    markElasticsearchAvailable();
+  } catch (error) {
+    markElasticsearchUnavailable();
+    throw error;
+  }
 }
 
 /** Load a product from Postgres and copy it into Elasticsearch. Called after every create/update. */

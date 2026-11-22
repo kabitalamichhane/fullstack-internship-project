@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { es, PRODUCT_INDEX } from '../lib/elastic';
+import {
+  es,
+  markElasticsearchAvailable,
+  markElasticsearchUnavailable,
+  PRODUCT_INDEX,
+  shouldUseElasticsearch,
+} from '../lib/elastic';
 import { prisma } from '../lib/prisma';
 import { asyncHandler } from '../utils/http';
 
@@ -39,9 +45,16 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const q = querySchema.parse(req.query);
+    if (!shouldUseElasticsearch()) {
+      res.json(await searchDatabase(q));
+      return;
+    }
     try {
-      res.json(await searchElastic(q));
+      const result = await searchElastic(q);
+      markElasticsearchAvailable();
+      res.json(result);
     } catch (err) {
+      markElasticsearchUnavailable();
       console.warn('[search] Elasticsearch unavailable, using database fallback:', (err as Error).message);
       res.json(await searchDatabase(q));
     }

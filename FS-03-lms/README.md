@@ -73,6 +73,8 @@ npm install
 npm run dev            # http://localhost:5174
 ```
 
+In development, if Redis is unavailable, the API uses temporary in-memory sessions and logs a warning. Sessions are lost when the API stops; video job queues still require Redis.
+
 ### Demo accounts (password `Password123!`)
 
 | Email | Role |
@@ -81,7 +83,7 @@ npm run dev            # http://localhost:5174
 | instructor@demo.com | Instructor (owns both demo courses, has sales data) |
 | admin@demo.com | Admin |
 
-Seeded lessons use a public HLS test stream of *Big Buck Bunny* (Blender open movie) so playback works immediately. Upload your own video (e.g. *Sintel* or a Pexels clip) in the Course editor to test the FFmpeg pipeline.
+Seeded lessons embed *How The Web Works - The Big Picture* (Academind) from YouTube. Upload your own video in the Course editor to test the FFmpeg pipeline.
 
 ### Try the full flow in 5 minutes
 

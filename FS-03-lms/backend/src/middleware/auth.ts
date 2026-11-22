@@ -18,16 +18,38 @@ declare global {
 }
 
 const SESSION_TTL = 60 * 60 * 24 * 7;
+type SessionUser = Omit<AuthUser, 'sid'>;
 
-export async function createSession(user: Omit<AuthUser, 'sid'>) {
+const memorySessions = new Map<string, { user: SessionUser; expiresAt: number }>();
+let useMemorySessions = false;
+
+export function enableInMemorySessions() {
+  if (config.env !== 'development' && config.env !== 'test') {
+    throw new Error('In-memory sessions are only available in development and test environments');
+  }
+  memorySessions.clear();
+  useMemorySessions = true;
+}
+
+export async function createSession(user: SessionUser) {
   const sid = crypto.randomUUID();
-  await redis.set(`session:${sid}`, JSON.stringify(user), 'EX', SESSION_TTL);
+  if (useMemorySessions) {
+    memorySessions.set(sid, { user, expiresAt: Date.now() + SESSION_TTL * 1000 });
+  } else {
+    await redis.set(`session:${sid}`, JSON.stringify(user), 'EX', SESSION_TTL);
+  }
   return jwt.sign({ sub: user.id, role: user.role, sid }, config.jwtSecret, { expiresIn: config.jwtExpiresIn } as jwt.SignOptions);
 }
 
-export const destroySession = (sid: string) => redis.del(`session:${sid}`);
+export async function destroySession(sid: string) {
+  if (useMemorySessions) {
+    memorySessions.delete(sid);
+  } else {
+    await redis.del(`session:${sid}`);
+  }
+}
 
-/** Verify a JWT and load its Redis session. Shared by HTTP routes and Socket.io. */
+/** Verify a JWT and load its session. Shared by HTTP routes and Socket.io. */
 export async function verifyToken(token: string): Promise<AuthUser> {
   let payload: jwt.JwtPayload;
   try {
@@ -35,9 +57,21 @@ export async function verifyToken(token: string): Promise<AuthUser> {
   } catch {
     throw new HttpError(401, 'Invalid or expired token');
   }
-  const session = await redis.get(`session:${payload.sid}`);
+  const sid = String(payload.sid);
+  let session: string | null;
+  if (useMemorySessions) {
+    const stored = memorySessions.get(sid);
+    if (stored && stored.expiresAt > Date.now()) {
+      session = JSON.stringify(stored.user);
+    } else {
+      memorySessions.delete(sid);
+      session = null;
+    }
+  } else {
+    session = await redis.get(`session:${sid}`);
+  }
   if (!session) throw new HttpError(401, 'Session expired, please log in again');
-  return { ...JSON.parse(session), sid: payload.sid };
+  return { ...JSON.parse(session), sid };
 }
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {

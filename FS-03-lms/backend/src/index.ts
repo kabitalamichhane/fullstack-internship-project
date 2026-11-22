@@ -4,10 +4,20 @@ import { config, paymentsMocked } from './config';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import { initSocket } from './socket';
+import { enableInMemorySessions } from './middleware/auth';
 
 async function main() {
   await prisma.$connect();
-  await redis.connect().catch((e) => console.warn('[redis]', e.message));
+  await redis.connect().catch((e) => {
+    console.warn('[redis]', e.message);
+    if (config.env === 'development') {
+      redis.disconnect();
+      enableInMemorySessions();
+      console.warn(
+        '[auth] Using in-memory sessions for development; sessions are lost when the API stops.',
+      );
+    }
+  });
 
   const server = http.createServer(createApp());
   initSocket(server); // Socket.io chat for live classes shares the same port

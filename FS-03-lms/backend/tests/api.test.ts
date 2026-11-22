@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { createSession, destroySession, enableInMemorySessions, verifyToken } from '../src/middleware/auth';
 
 const app = createApp();
 
@@ -21,5 +22,27 @@ describe('LMS API smoke tests', () => {
   it('validates registration', async () => {
     const res = await request(app).post('/api/auth/register').send({ name: 'A', email: 'x', password: 'short' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('in-memory auth sessions', () => {
+  it('authenticates and revokes sessions without Redis', async () => {
+    enableInMemorySessions();
+    const token = await createSession({
+      id: 'local-user',
+      role: 'STUDENT',
+      email: 'local@example.com',
+      name: 'Local User',
+    });
+
+    await expect(verifyToken(token)).resolves.toMatchObject({
+      id: 'local-user',
+      role: 'STUDENT',
+      email: 'local@example.com',
+    });
+
+    const session = await verifyToken(token);
+    await destroySession(session.sid);
+    await expect(verifyToken(token)).rejects.toMatchObject({ status: 401 });
   });
 });

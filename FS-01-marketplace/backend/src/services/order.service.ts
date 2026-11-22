@@ -1,10 +1,9 @@
 import { prisma } from '../lib/prisma';
-import { redis } from '../lib/redis';
 import { stripe } from '../lib/stripe';
 import { config } from '../config';
 import { computeDiscount, splitOrder } from '../utils/pricing';
 import { HttpError } from '../utils/http';
-import { getCartView, cartKey } from './cart.service';
+import { clearCart, getCartView } from './cart.service';
 import { indexProduct } from '../lib/elastic';
 
 export type ShippingAddress = {
@@ -121,7 +120,7 @@ export async function markOrderPaid(orderId: string, paymentIntentId?: string) {
       ? [prisma.coupon.update({ where: { code: order.couponCode }, data: { usedCount: { increment: 1 } } })]
       : []),
   ]);
-  await redis.del(cartKey(order.userId)).catch(() => undefined);
+  await clearCart(order.userId).catch(() => undefined);
 
   if (stripe && paymentIntentId) {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);

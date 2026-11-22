@@ -6,15 +6,15 @@
  *   instructor@demo.com  INSTRUCTOR
  *   student@demo.com     STUDENT
  *
- * Seeded lessons point at a public HLS test stream of "Big Buck Bunny" (Blender open movie)
- * so videos play before you upload your own. Upload a video from the course editor to test
- * the FFmpeg → S3 → CloudFront pipeline.
+ * Seeded lessons embed an educational web explainer from Academind on YouTube.
+ * Upload a video from the course editor to test the FFmpeg → S3 → CloudFront pipeline.
  */
 import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
-const SAMPLE_HLS = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const SAMPLE_VIDEO = 'https://www.youtube.com/watch?v=hJHvdBlSxug';
+const SAMPLE_VIDEO_DURATION_SEC = 745;
 
 async function main() {
   const passwordHash = await bcrypt.hash('Password123!', 10);
@@ -26,7 +26,11 @@ async function main() {
   const student = await mk('student@demo.com', 'Demo Student', 'STUDENT');
 
   if (await prisma.course.findUnique({ where: { slug: 'web-development-foundations' } })) {
-    console.log('Seed data already present');
+    const updated = await prisma.lesson.updateMany({
+      where: { hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
+      data: { hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
+    });
+    console.log(`Seed data already present; updated ${updated.count} sample lesson videos`);
     return;
   }
 
@@ -43,9 +47,9 @@ async function main() {
       published: true,
       lessons: {
         create: [
-          { position: 1, title: 'How websites work', content: 'Browsers, URLs, DNS and the request/response cycle.', isPreview: true, videoStatus: 'READY', hlsUrl: SAMPLE_HLS, durationSec: 634 },
-          { position: 2, title: 'Semantic HTML', content: 'header, nav, main, section, article, footer and accessible forms.', videoStatus: 'READY', hlsUrl: SAMPLE_HLS, durationSec: 634 },
-          { position: 3, title: 'Modern CSS: Flexbox & Grid', content: 'Layouts and responsive design with media queries.', videoStatus: 'READY', hlsUrl: SAMPLE_HLS, durationSec: 634 },
+          { position: 1, title: 'How websites work', content: 'Browsers, URLs, DNS and the request/response cycle.', isPreview: true, videoStatus: 'READY', hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
+          { position: 2, title: 'Semantic HTML', content: 'header, nav, main, section, article, footer and accessible forms.', videoStatus: 'READY', hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
+          { position: 3, title: 'Modern CSS: Flexbox & Grid', content: 'Layouts and responsive design with media queries.', videoStatus: 'READY', hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
         ],
       },
     },
@@ -80,8 +84,8 @@ async function main() {
       published: true,
       lessons: {
         create: [
-          { position: 1, title: 'What is an API?', isPreview: true, content: 'Clients, servers, HTTP methods and status codes.', videoStatus: 'READY', hlsUrl: SAMPLE_HLS, durationSec: 634 },
-          { position: 2, title: 'CRUD with Express', content: 'GET, POST, PUT/PATCH, DELETE.', videoStatus: 'READY', hlsUrl: SAMPLE_HLS, durationSec: 634 },
+          { position: 1, title: 'What is an API?', isPreview: true, content: 'Clients, servers, HTTP methods and status codes.', videoStatus: 'READY', hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
+          { position: 2, title: 'CRUD with Express', content: 'GET, POST, PUT/PATCH, DELETE.', videoStatus: 'READY', hlsUrl: SAMPLE_VIDEO, durationSec: SAMPLE_VIDEO_DURATION_SEC },
         ],
       },
       liveClasses: {

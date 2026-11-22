@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { authenticate, createSession, destroySession, enableInMemorySessions } from '../src/middleware/auth';
+import { Request, Response } from 'express';
 
 // These tests don't need a database: they check routing, validation and access control.
 const app = createApp();
@@ -33,5 +35,39 @@ describe('API smoke tests', () => {
   it('unknown routes return 404 JSON', async () => {
     const res = await request(app).get('/api/nope');
     expect(res.status).toBe(404);
+  });
+});
+
+describe('in-memory auth sessions', () => {
+  it('authenticates and revokes sessions without Redis', async () => {
+    enableInMemorySessions();
+    const user = {
+      id: 'local-user',
+      role: 'CUSTOMER' as const,
+      email: 'local@example.com',
+      name: 'Local User',
+    };
+    const token = await createSession(user);
+    const req = { headers: { authorization: `Bearer ${token}` } } as Request;
+    let authError: Error | undefined;
+    await new Promise<void>((resolve) => {
+      authenticate(req, {} as Response, (err) => {
+        authError = err;
+        resolve();
+      });
+    });
+
+    expect(authError).toBeUndefined();
+    expect(req.user).toMatchObject(user);
+    await destroySession(req.user!.sid);
+
+    let revokedError: Error | undefined;
+    await new Promise<void>((resolve) => {
+      authenticate(req, {} as Response, (err) => {
+        revokedError = err;
+        resolve();
+      });
+    });
+    expect(revokedError).toMatchObject({ status: 401 });
   });
 });
